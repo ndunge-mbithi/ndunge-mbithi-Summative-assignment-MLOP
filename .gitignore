@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+.env
+storage/
+data/cache/
+data/val/
+# data/train/ in the repository holds only the 3,000 replay-pool images (data/replay_pool.csv).
+# scripts/acquire_data.py rewrites it with the full 19k-image training set (~260 MB): do not commit that.
+models/.registry.lock
+models/.*.json
+node_modules/
+demo_upload/*
+*.zip
+!demo_upload/demo_batch.zip

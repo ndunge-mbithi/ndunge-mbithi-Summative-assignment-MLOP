@@ -1,0 +1,48 @@
+# Local / single-host deployment: N API replicas behind an nginx load balancer,
+# sharing one persistent volume (SQLite + uploads + model registry).
+#
+#   docker compose up -d --build                 # 1 replica
+#   docker compose up -d --scale api=3           # 3 replicas (nginx re-resolves on restart)
+#   UI + API: http://localhost:8080
+services:
+  api:
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-python:3.12-slim}
+    image: smearscan:latest
+    environment:
+      SMEAR_LOG_LEVEL: ${SMEAR_LOG_LEVEL:-INFO}
+      SMEAR_RETRAIN_MAX_EPOCHS: ${SMEAR_RETRAIN_MAX_EPOCHS:-6}
+      TF_NUM_INTRAOP_THREADS: ${TF_THREADS:-1}
+      TF_NUM_INTEROP_THREADS: 1
+      OMP_NUM_THREADS: ${TF_THREADS:-1}
+    volumes:
+      - smearscan-data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "${API_CPUS:-1.0}"
+          memory: 2g
+    restart: unless-stopped
+    expose: ["8000"]
+
+  lb:
+    build:
+      context: deploy/nginx
+      args:
+        BASE_IMAGE: ${NGINX_BASE_IMAGE:-nginx:1.27-alpine}
+    image: smearscan-lb:latest
+    ports: ["${LB_PORT:-8080}:80"]
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128m
+    restart: unless-stopped
+
+volumes:
+  smearscan-data:
