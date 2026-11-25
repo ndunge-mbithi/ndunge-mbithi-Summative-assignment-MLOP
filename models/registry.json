@@ -1,0 +1,31 @@
+{
+  "active": "v1",
+  "versions": {
+    "v1": {
+      "status": "active",
+      "created_at": "2026-11-23T11:38:36+00:00",
+      "parent": null,
+      "summary": {
+        "test_accuracy": 0.9578846614022494,
+        "test_f1": 0.9579349904397706,
+        "test_recall": 0.9479659413434248,
+        "test_roc_auc": 0.9912624472844475
+      }
+    }
+  },
+  "events": [
+    {
+      "at": "2026-11-23T11:38:36+00:00",
+      "event": "registered",
+      "version": "v1",
+      "status": "candidate"
+    },
+    {
+      "at": "2026-11-23T11:38:36+00:00",
+      "event": "promoted",
+      "version": "v1",
+      "previous": null,
+      "reason": "initial model from notebook"
+    }
+  ]
+}

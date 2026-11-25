@@ -1,0 +1,21 @@
+# Render Blueprint (alternative to Hugging Face Spaces). Persistent disks need a paid
+# instance; TensorFlow serving + in-container retraining needs >= 2 GB RAM, so the
+# "standard" plan is the smallest that runs the full workflow.
+services:
+  - type: web
+    name: smearscan
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    healthCheckPath: /ready
+    envVars:
+      - key: SMEAR_MODELS_DIR
+        value: /data/models
+      - key: SMEAR_STORAGE_DIR
+        value: /data/storage
+      - key: SMEAR_LOG_LEVEL
+        value: INFO
+    disk:
+      name: smearscan-data
+      mountPath: /data
+      sizeGB: 5

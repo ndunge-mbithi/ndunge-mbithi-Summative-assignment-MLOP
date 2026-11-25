@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SmearScan · Malaria cell screening</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23e9a6ad'/><circle cx='12' cy='13' r='3.2' fill='%235b2a6e'/></svg>">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="#e9a6ad"/><circle cx="16" cy="16" r="13" fill="none" stroke="#c97c86" stroke-width="1.5"/><circle cx="12" cy="13" r="3.2" fill="#5b2a6e"/><circle cx="20.5" cy="19" r="1.8" fill="#5b2a6e" opacity=".7"/></svg>
+    <div><strong>SmearScan</strong><span>Malaria parasite screening · thin blood smear cells</span></div>
+  </div>
+  <div class="status" id="status-bar">
+    <span class="pill" id="st-health">API …</span>
+    <span class="pill" id="st-model">model …</span>
+    <span class="pill subtle" id="st-uptime">uptime …</span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="predict" class="active">Predict</button>
+  <button role="tab" data-tab="data">Data &amp; retraining</button>
+  <button role="tab" data-tab="monitor">Monitoring</button>
+  <button role="tab" data-tab="models">Models</button>
+  <button role="tab" data-tab="insights">Dataset insights</button>
+</nav>
+
+<main>
+  <!-- ============================== PREDICT -->
+  <section id="tab-predict" class="tab active">
+    <div class="grid two">
+      <div class="card">
+        <h2>Classify a cell image</h2>
+        <p class="muted">Upload one segmented red-blood-cell crop (PNG/JPEG). The image is validated, preprocessed exactly as in training, and scored by the active model.</p>
+        <label class="drop" id="pred-drop">
+          <input type="file" id="pred-file" accept="image/*">
+          <span id="pred-drop-text">Drop an image here or <u>browse</u></span>
+        </label>
+        <div class="row"><button id="pred-btn" class="primary" disabled>Predict</button><span id="pred-state" class="state"></span></div>
+        <details class="hint"><summary>No image to hand?</summary>
+          <p>Use a known example from the held-out test patients:</p>
+          <div class="row"><button class="ghost" data-example="parasitized">Load a parasitized example</button><button class="ghost" data-example="uninfected">Load an uninfected example</button></div>
+        </details>
+      </div>
+      <div class="card" id="pred-result-card">
+        <h2>Result</h2>
+        <div id="pred-empty" class="empty">No prediction yet.</div>
+        <div id="pred-result" hidden>
+          <div class="result-head">
+            <img id="pred-preview" alt="uploaded cell">
+            <div>
+              <div id="pred-label" class="verdict"></div>
+              <div id="pred-conf" class="muted"></div>
+              <div id="pred-rec" class="rec"></div>
+            </div>
+          </div>
+          <div class="bar"><div id="pred-bar"></div><span class="thr" title="decision threshold"></span></div>
+          <div class="bar-legend"><span>Uninfected</span><span>P(parasitized)</span><span>Parasitized</span></div>
+          <table class="kv" id="pred-kv"></table>
+          <div class="feedback">
+            <span class="muted">Confirmed by microscopy? Record ground truth:</span>
+            <button class="ghost small" data-fb="Parasitized">Parasitized</button>
+            <button class="ghost small" data-fb="Uninfected">Uninfected</button>
+            <span id="fb-state" class="state"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== DATA & RETRAINING -->
+  <section id="tab-data" class="tab">
+    <div class="grid two">
+      <div class="card">
+        <h2>1 · Upload labelled data</h2>
+        <p class="muted">Either select many images and give them one label, or upload a ZIP with <code>Parasitized/</code> and <code>Uninfected/</code> folders. Files are validated, de-duplicated, stored, and preprocessed with the training pipeline.</p>
+        <div class="field"><label>Images</label><input type="file" id="up-files" multiple accept="image/*"></div>
+        <div class="field"><label>Label for these images</label>
+          <select id="up-label"><option value="">— choose —</option><option>Parasitized</option><option>Uninfected</option></select></div>
+        <div class="field"><label>…or ZIP archive</label><input type="file" id="up-zip" accept=".zip"></div>
+        <div class="field"><label>Note (optional)</label><input type="text" id="up-note" placeholder="e.g. clinic A, slide batch 12"></div>
+        <div class="row"><button id="up-btn" class="primary">Upload</button><span id="up-state" class="state"></span></div>
+        <div id="up-report"></div>
+      </div>
+      <div class="card">
+        <h2>2 · Retrain</h2>
+        <p class="muted">Fine-tunes the <strong>currently active model</strong> from its saved weights on all new uploads, mixed with replayed original cells to avoid forgetting. The new version is promoted only if it passes the acceptance gate on held-out patients.</p>
+        <div class="stats" id="ds-stats"></div>
+        <div class="row"><button id="rt-btn" class="primary">Start retraining</button><span id="rt-state" class="state"></span></div>
+        <div id="job-panel" hidden>
+          <div class="job-head"><strong id="job-id"></strong><span id="job-status" class="pill"></span></div>
+          <ol class="stages" id="job-stages"></ol>
+          <div class="progress"><div id="job-progress"></div></div>
+          <div class="chart-box small"><canvas id="job-chart"></canvas></div>
+          <ul class="log" id="job-log"></ul>
+          <div id="job-result"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Stored uploads</h2>
+      <div id="batches"></div>
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+  </section>
+
+  <!-- ============================== MONITORING -->
+  <section id="tab-monitor" class="tab">
+    <div class="row between"><h2 class="inline">System monitoring</h2>
+      <span><button class="ghost small" id="mon-refresh">Refresh</button> <span class="muted small" id="mon-time"></span></span></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="grid two">
+      <div class="card"><h3>Requests per minute &amp; prediction p95 latency (last hour)</h3><div class="chart-box"><canvas id="ch-traffic"></canvas></div></div>
+      <div class="card"><h3>Prediction confidence (recent window)</h3><div class="chart-box"><canvas id="ch-conf"></canvas></div></div>
+    </div>
+    <div class="grid two">
+      <div class="card"><h3>Endpoints</h3><table class="tbl" id="tbl-endpoints"></table></div>
+      <div class="card"><h3>Input drift vs training data (PSI)</h3><table class="tbl" id="tbl-drift"></table>
+        <p class="muted small">PSI &lt; 0.1 stable · 0.1–0.2 moderate · &gt; 0.2 drift. Computed on the last 500 predictions' image statistics against the active model's training reference. Mean red/blue are informational: slide-to-slide hue moves them without hurting accuracy.</p></div>
+    </div>
+    <div class="grid two">
+      <div class="card"><h3>Production quality (ground-truth feedback)</h3><div id="quality"></div></div>
+      <div class="card"><h3>Retraining recommendation</h3><div id="signal"></div></div>
+    </div>
+  </section>
+
+  <!-- ============================== MODELS -->
+  <section id="tab-models" class="tab">
+    <div class="grid two">
+      <div class="card"><h2>Active model</h2><div id="active-model"></div></div>
+      <div class="card"><h2>Test-set evaluation (held-out patients)</h2>
+        <div class="grid two tight"><div id="cm"></div><div class="chart-box small"><canvas id="ch-metrics"></canvas></div></div></div>
+    </div>
+    <div class="card"><h2>Version history</h2><table class="tbl" id="tbl-versions"></table>
+      <div class="row"><button id="rb-btn" class="ghost">Roll back to previous version</button><span id="rb-state" class="state"></span></div></div>
+    <div class="card"><h2>Retraining runs</h2><table class="tbl" id="tbl-jobs"></table></div>
+  </section>
+
+  <!-- ============================== INSIGHTS -->
+  <section id="tab-insights" class="tab">
+    <div class="card"><h2>About the data</h2><div id="card-info"></div></div>
+    <div id="insights"></div>
+  </section>
+</main>
+<footer>SmearScan is a screening aid, not a diagnostic device. Positive and low-confidence results should be confirmed by a trained microscopist.</footer>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

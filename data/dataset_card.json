@@ -1,0 +1,36 @@
+{
+  "name": "NIH/NLM Malaria Cell Images (thin smear, P. falciparum)",
+  "provenance": "Chittagong Medical College Hospital, Bangladesh; imaged and annotated by Mahidol-Oxford Tropical Medicine Research Unit; published by U.S. NLM/LHNCBC",
+  "canonical_url": "https://lhncbc.nlm.nih.gov/LHC-research/LHC-projects/image-processing/malaria-datasheet.html",
+  "mirror_used": "/home/claude/ext/odd/cell_images",
+  "citation": "Rajaraman S. et al. Pre-trained convolutional neural networks as feature extractors toward improved malaria parasite detection in thin blood smear images. PeerJ 6:e4568 (2018)",
+  "licence": "U.S. Government work (NLM) - public domain in the United States; attribution requested",
+  "classes": [
+    "Parasitized",
+    "Uninfected"
+  ],
+  "n_images": 27556,
+  "n_patients": 201,
+  "split_seed": 42,
+  "split_strategy": "patient-grouped (slide id from filename), no patient in more than one split",
+  "counts": {
+    "train": {
+      "Parasitized": 9608,
+      "Uninfected": 9609
+    },
+    "val": {
+      "Parasitized": 2056,
+      "Uninfected": 2104
+    },
+    "test": {
+      "Parasitized": 2114,
+      "Uninfected": 2065
+    }
+  },
+  "patients_per_split": {
+    "train": 140,
+    "val": 31,
+    "test": 30
+  },
+  "patient_overlap_between_splits": 0
+}
