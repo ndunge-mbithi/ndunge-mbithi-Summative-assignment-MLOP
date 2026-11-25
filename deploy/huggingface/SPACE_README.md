@@ -7,7 +7,7 @@ sdk: docker
 app_port: 8000
 pinned: false
 license: mit
-short_description: Malaria parasite screening of blood-smear cells, with retraining
+short_description: Malaria cell screening with gated retraining
 ---
 
 # SmearScan

@@ -8,9 +8,10 @@ with rollback, production monitoring with drift detection, Docker images, and Lo
 
 | | |
 |---|---|
-| **Live app (UI + API)** | Not yet deployed — one command, see [Cloud deployment](#cloud-deployment). The same image is verified locally (§9–§11). |
-| **API docs (OpenAPI)** | `<app URL>/docs` |
-| **Demo video** | To be recorded against the deployed app — script in [`docs/video_script.md`](docs/video_script.md) |
+| **Live app (UI + API)** | [SmearScan on Hugging Face](https://ndunge-mbithi-smearscan.hf.space/) |
+| **API docs (OpenAPI)** | [Interactive API documentation](https://ndunge-mbithi-smearscan.hf.space/docs) |
+| **Health** | [`/health`](https://ndunge-mbithi-smearscan.hf.space/health) · [`/ready`](https://ndunge-mbithi-smearscan.hf.space/ready) |
+| **Video walkthrough script** | [`docs/video_script.md`](docs/video_script.md) |
 | **Notebook** | [`notebook/malaria_cell_classification.ipynb`](notebook/malaria_cell_classification.ipynb) (executed, with outputs) |
 
 ---
@@ -167,7 +168,7 @@ nginx for load balancing; Docker for packaging; Locust for load generation.
 
 1. **Upload** labelled data in the UI (*Data & retraining*) or `POST /api/uploads`: many images with one label, and/or a
    ZIP with `Parasitized/` and `Uninfected/` folders. Each file is validated (format, corruption, size), de-duplicated by
-   SHA-256, stored raw under `storage/uploads/<batch>/`, preprocessed with the training function into a `.npy`, and
+  SHA-256, stored raw in a directory for its upload batch, preprocessed with the training function into a `.npy`, and
    recorded in `samples` with batch, label, image stats and status. Rejections are reported per file with the reason.
 2. **Trigger** with the *Start retraining* button or `POST /api/retrain` (needs ≥ 20 unused samples).
 3. **Train** (`src/retraining.py`): loads the **currently active model's saved weights** (v1 is the notebook's
@@ -182,7 +183,7 @@ nginx for load balancing; Docker for packaging; Locust for load generation.
 6. **Rollback**: *Models* tab → *Roll back*, or `POST /api/models/rollback`; any archived version can be re-activated.
 
 **Measured run (deployed Docker stack, driven through the web UI).** 40 labelled cells from validation-split patients
-(`demo_upload/demo_batch.zip`) were uploaded and the *Start retraining* button pressed. The worker fine-tuned v1 on
+were uploaded in a labelled ZIP and the *Start retraining* button pressed. The worker fine-tuned v1 on
 32 new + 600 replayed cells; early stopping kept epoch 1 of 3; total 95 s on one CPU. Gold-set results (4,179 cells):
 
 | | accuracy | precision | recall | F1 | ROC-AUC |
@@ -243,8 +244,7 @@ endpoint and keeps the prediction path free of synchronous database writes.
 ![monitoring](docs/screenshots/07_monitoring.png)
 
 ## 7. API
-
-Interactive docs at `/docs`. All endpoints return JSON.
+Interactive docs at [the live API docs](https://ndunge-mbithi-smearscan.hf.space/docs). All endpoints return JSON.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -264,12 +264,20 @@ Interactive docs at `/docs`. All endpoints return JSON.
 | GET | `/api/insights` | dataset insights for the UI |
 | GET | `/api/examples/{parasitized\|uninfected}` | a known-label held-out test image (demos, smoke tests) |
 
+The following examples use the public app URL and images included in this repository:
+
 ```bash
-curl -F "file=@data/test/Parasitized/C39P4thinF_original_IMG_20150622_105253_cell_102.png" $URL/api/predict
-curl -F "label=Uninfected" -F "files=@a.png" -F "files=@b.png" $URL/api/uploads
-curl -F "archive=@demo_upload/demo_batch.zip" $URL/api/uploads
-curl -X POST -H "Content-Type: application/json" -d '{}' $URL/api/retrain
+APP_URL=https://ndunge-mbithi-smearscan.hf.space
+curl -F "file=@data/test/Parasitized/C39P4thinF_original_IMG_20150622_105253_cell_102.png" "$APP_URL/api/predict"
+curl -F "label=Uninfected" -F "files=@data/test/Uninfected/C104P65ThinF_IMG_20150918_170850_cell_140.png" "$APP_URL/api/uploads"
+# Retraining requires at least 20 unused labelled samples.
+curl -X POST -H "Content-Type: application/json" -d '{}' "$APP_URL/api/retrain"
 ```
+
+**Deployment status.** The [public Space](https://huggingface.co/spaces/ndunge-mbithi/smearscan) is live. I verified
+that [health](https://ndunge-mbithi-smearscan.hf.space/health) and
+[readiness](https://ndunge-mbithi-smearscan.hf.space/ready) return successful responses. The UI is at the app root;
+the OpenAPI docs are available at `/docs`.
 
 ## 8. Repository layout
 
@@ -301,7 +309,6 @@ tests/               pytest suite (preprocessing, model, registry, API, upload�
 locust/              locustfile, experiment runner, summariser, measured results
 deploy/              nginx load balancer, Hugging Face Space and Render configs
 docs/                figures, UI screenshots, hyperparameter search, video script
-demo_upload/         demo_batch.zip: 40 labelled validation-split cells for the upload/retraining demo
 Dockerfile, docker-compose.yml, requirements*.txt, .env.example
 ```
 
@@ -320,7 +327,7 @@ The repository ships the trained model, the gold test set and the replay pool, s
 clean clone. To rebuild everything from the raw data:
 
 ```bash
-python scripts/acquire_data.py --git-mirror https://github.com/TheODDYSEY/Malaria-Detection-Model   # or --source <cell_images/>
+python scripts/acquire_data.py --git-mirror https://github.com/TheODDYSEY/Malaria-Detection-Model
 python scripts/build_insights.py && python scripts/make_replay_pool.py
 curl -L -o models/pretrained/mobilenet_v2_1.0_128_no_top.h5 \
   https://github.com/JonathanCMitchell/mobilenet_v2_keras/releases/download/v1.1/mobilenet_v2_weights_tf_dim_ordering_tf_kernels_1.0_128_no_top.h5
@@ -348,28 +355,31 @@ The image holds the code, model v1, the gold test set and the replay pool (the b
 start the entrypoint seeds `/data/models` from the image; after that the volume is authoritative, so retrained versions
 and uploads survive restarts and redeploys. Health check: `GET /health`; limits per replica: 1 CPU, 2 GB.
 
-`BASE_IMAGE` can be overridden (`--build-arg BASE_IMAGE=...`) for environments that can't pull `python:3.12-slim`.
+`BASE_IMAGE` defaults to `python:3.12-slim`. For an alternate Python 3.12 image that includes `venv`, set `BASE_IMAGE` as a Docker build argument.
 
 ### Cloud deployment
 
-**Target: Hugging Face Spaces (Docker).** The free CPU tier has 2 vCPU and 16 GB RAM, which is enough to run real
-retraining inside the service (512 MB tiers are not: TensorFlow serving plus a training process needs ~1.5–2 GB).
+**Target: Hugging Face Spaces (Docker).** Hugging Face currently requires a PRO subscription to host Docker Spaces on
+the free `cpu-basic` hardware. This project uses a Docker Space, so repository creation can fail with HTTP 402 until
+the account has the required plan. Token permissions do not bypass this billing requirement. The deployment script
+below remains usable after the account is eligible for Docker Space hosting.
 
-```bash
+```zsh
 pip install huggingface_hub==0.26.5
-export HF_TOKEN=hf_...                       # write token; never committed
-python scripts/deploy_hf.py --space <hf-username>/smearscan
-# -> https://<hf-username>-smearscan.hf.space  (UI at /, API docs at /docs)
+read -s "HF_TOKEN?Enter your Hugging Face write token: "
+export HF_TOKEN
+python scripts/deploy_hf.py --space ndunge-mbithi/smearscan
+unset HF_TOKEN
 ```
 
 The script stages exactly the Docker build context (code, model registry, gold test set, replay-pool images) and
 uploads it through the Hub HTTP API, so no git-lfs setup is needed. The Space builds the same `Dockerfile` with the
 default `python:3.12-slim` base. Health check: `GET /ready`.
 
-**Persistence.** Uploads, the SQLite database, retrained model versions and job logs all live under `/data`. On a free
-Space the container disk resets when the Space restarts or rebuilds, so uploaded data and retrained versions would be
-lost — and the entrypoint would re-seed v1. For durable storage enable the Space's *Persistent storage* (mounted at
-`/data`, paid add-on); nothing in the code changes.
+**Persistence.** Uploads, the SQLite database, retrained model versions and job logs all live under `/data`. Without
+persistent storage, the container disk resets when the Space restarts or rebuilds, so uploaded data and retrained
+versions would be lost — and the entrypoint would re-seed v1. For durable storage enable the Space's *Persistent
+storage* (mounted at `/data`, paid add-on); nothing in the code changes.
 
 **Alternative: Render** (`deploy/render/render.yaml`): Docker web service with a persistent disk at `/data`. Persistent
 disks require a paid instance, and the `standard` plan (2 GB) is the smallest that runs retraining.
@@ -377,10 +387,10 @@ disks require a paid instance, and the `standard` plan (2 GB) is the smallest th
 **Scaling beyond one host.** Replicas share one volume here. Across hosts, swap SQLite for PostgreSQL (one module),
 put uploads and model artifacts in object storage, and run the retraining worker as a separate job/queue consumer.
 
-**Deployment status.** This repository was built and verified in an environment without cloud credentials, so the
-public deployment is the one remaining manual step. Everything that runs in the cloud has been run here: the exact
-image, single-container and nginx + 1–3 replica setups, health checks, volume seeding, upload persistence and
-retraining inside the container, and the UI against the containerised API.
+**Deployment status.** The [public Space](https://huggingface.co/spaces/ndunge-mbithi/smearscan) is live. I verified
+that [health](https://ndunge-mbithi-smearscan.hf.space/health) and
+[readiness](https://ndunge-mbithi-smearscan.hf.space/ready) return successful responses. The UI is at the app root;
+the OpenAPI docs are available at [`/docs`](https://ndunge-mbithi-smearscan.hf.space/docs).
 
 ## 10. Load testing
 
